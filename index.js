@@ -35,6 +35,7 @@ const verifyToken = async (req, res, next) => {
 };
 
 const CATEGORIES = ['Fiction', 'Science', 'History', 'Kids', 'Others'];
+const BORROW_DAYS = 7;
 
 // Keeps only the fields a user can set, so nobody can send their own owner or dates
 const getBookFields = (body) => {
@@ -169,6 +170,50 @@ app.delete('/books/:id', verifyToken, async (req, res) => {
   await booksCollection.deleteOne({ _id: book._id });
 
   res.send({ message: 'Book deleted' });
+});
+
+app.post('/borrows', verifyToken, async (req, res) => {
+  const { bookId } = req.body;
+  if (!ObjectId.isValid(bookId)) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  const book = await booksCollection.findOne({ _id: new ObjectId(bookId) });
+  if (!book) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  const alreadyBorrowed = await borrowsCollection.findOne({
+    bookId,
+    userEmail: req.user.email,
+  });
+  if (alreadyBorrowed) {
+    return res.status(400).send({ message: 'You have already borrowed this book' });
+  }
+
+  // Only takes a copy if one is left, even when two people borrow at once
+  const result = await booksCollection.updateOne(
+    { _id: book._id, availableCopies: { $gt: 0 } },
+    { $inc: { availableCopies: -1 } },
+  );
+  if (result.modifiedCount === 0) {
+    return res.status(400).send({ message: 'This book is not available right now' });
+  }
+
+  const borrowDate = new Date();
+  const returnDate = new Date(borrowDate);
+  returnDate.setDate(returnDate.getDate() + BORROW_DAYS);
+
+  await borrowsCollection.insertOne({
+    bookId,
+    bookTitle: book.title,
+    bookImage: book.image,
+    userEmail: req.user.email,
+    borrowDate,
+    returnDate,
+  });
+
+  res.status(201).send({ message: 'Book borrowed' });
 });
 
 app.use((error, req, res, next) => {
