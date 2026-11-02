@@ -34,6 +34,26 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
+const CATEGORIES = ['Fiction', 'Science', 'History', 'Kids', 'Others'];
+
+// Keeps only the fields a user can set, so nobody can send their own owner or dates
+const getBookFields = (body) => {
+  const { title, author, category, image, description } = body;
+  const totalCopies = Number(body.totalCopies);
+
+  if (!title || !author || !image || !description) {
+    return { error: 'Please fill in all the fields' };
+  }
+  if (!CATEGORIES.includes(category)) {
+    return { error: 'Please choose a valid category' };
+  }
+  if (!Number.isInteger(totalCopies) || totalCopies < 1) {
+    return { error: 'Total copies must be at least 1' };
+  }
+
+  return { fields: { title, author, category, image, description, totalCopies } };
+};
+
 app.get('/', (req, res) => {
   res.send({ message: 'BookNook server is running' });
 });
@@ -74,6 +94,23 @@ app.get('/books/:id', verifyToken, async (req, res) => {
   }
 
   res.send(book);
+});
+
+app.post('/books', verifyToken, async (req, res) => {
+  const { fields, error } = getBookFields(req.body);
+  if (error) {
+    return res.status(400).send({ message: error });
+  }
+
+  const result = await booksCollection.insertOne({
+    ...fields,
+    availableCopies: fields.totalCopies,
+    userName: req.user.name,
+    userEmail: req.user.email,
+    addedAt: new Date(),
+  });
+
+  res.status(201).send({ message: 'Book added', id: result.insertedId });
 });
 
 app.use((error, req, res, next) => {
