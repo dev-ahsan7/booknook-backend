@@ -166,6 +166,11 @@ app.delete('/books/:id', verifyToken, async (req, res) => {
   if (book.userEmail !== req.user.email) {
     return res.status(403).send({ message: 'You can only delete your own books' });
   }
+  if (book.availableCopies < book.totalCopies) {
+    return res.status(400).send({
+      message: "This book is borrowed right now, so it can't be deleted yet",
+    });
+  }
 
   await booksCollection.deleteOne({ _id: book._id });
 
