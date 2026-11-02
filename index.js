@@ -59,16 +59,6 @@ app.get('/', (req, res) => {
   res.send({ message: 'BookNook server is running' });
 });
 
-app.get('/health', async (req, res) => {
-  try {
-    await db.command({ ping: 1 });
-    res.send({ database: 'connected' });
-  } catch (error) {
-    console.error('Database ping failed:', error);
-    res.status(500).send({ database: 'not connected' });
-  }
-});
-
 app.get('/books', async (req, res) => {
   const { email, limit } = req.query;
   const query = email ? { userEmail: email } : {};
