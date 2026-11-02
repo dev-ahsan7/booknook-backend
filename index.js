@@ -113,6 +113,64 @@ app.post('/books', verifyToken, async (req, res) => {
   res.status(201).send({ message: 'Book added', id: result.insertedId });
 });
 
+app.patch('/books/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  const book = await booksCollection.findOne({ _id: new ObjectId(id) });
+  if (!book) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+  if (book.userEmail !== req.user.email) {
+    return res.status(403).send({ message: 'You can only edit your own books' });
+  }
+
+  const { fields, error } = getBookFields(req.body);
+  if (error) {
+    return res.status(400).send({ message: error });
+  }
+
+  const borrowedCopies = book.totalCopies - book.availableCopies;
+  if (fields.totalCopies < borrowedCopies) {
+    return res.status(400).send({
+      message: `${borrowedCopies} copies are borrowed right now, so total copies can't be lower than that`,
+    });
+  }
+
+  await booksCollection.updateOne(
+    { _id: book._id },
+    {
+      $set: {
+        ...fields,
+        availableCopies: fields.totalCopies - borrowedCopies,
+      },
+    },
+  );
+
+  res.send({ message: 'Book updated' });
+});
+
+app.delete('/books/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  const book = await booksCollection.findOne({ _id: new ObjectId(id) });
+  if (!book) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+  if (book.userEmail !== req.user.email) {
+    return res.status(403).send({ message: 'You can only delete your own books' });
+  }
+
+  await booksCollection.deleteOne({ _id: book._id });
+
+  res.send({ message: 'Book deleted' });
+});
+
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(500).send({ message: 'Something went wrong on the server' });
