@@ -48,6 +48,34 @@ app.get('/health', async (req, res) => {
   }
 });
 
+app.get('/books', async (req, res) => {
+  const { email, limit } = req.query;
+  const query = email ? { userEmail: email } : {};
+
+  const books = await booksCollection
+    .find(query)
+    .project({ userEmail: 0 })
+    .sort({ addedAt: -1 })
+    .limit(Math.max(Number(limit) || 0, 0))
+    .toArray();
+
+  res.send(books);
+});
+
+app.get('/books/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  const book = await booksCollection.findOne({ _id: new ObjectId(id) });
+  if (!book) {
+    return res.status(404).send({ message: 'Book not found' });
+  }
+
+  res.send(book);
+});
+
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(500).send({ message: 'Something went wrong on the server' });
