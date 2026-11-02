@@ -216,6 +216,38 @@ app.post('/borrows', verifyToken, async (req, res) => {
   res.status(201).send({ message: 'Book borrowed' });
 });
 
+app.get('/borrows', verifyToken, async (req, res) => {
+  const borrows = await borrowsCollection
+    .find({ userEmail: req.user.email })
+    .sort({ borrowDate: -1 })
+    .toArray();
+
+  res.send(borrows);
+});
+
+app.delete('/borrows/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(404).send({ message: 'Borrow not found' });
+  }
+
+  const borrow = await borrowsCollection.findOne({ _id: new ObjectId(id) });
+  if (!borrow) {
+    return res.status(404).send({ message: 'Borrow not found' });
+  }
+  if (borrow.userEmail !== req.user.email) {
+    return res.status(403).send({ message: 'You can only return your own books' });
+  }
+
+  await borrowsCollection.deleteOne({ _id: borrow._id });
+  await booksCollection.updateOne(
+    { _id: new ObjectId(borrow.bookId) },
+    { $inc: { availableCopies: 1 } },
+  );
+
+  res.send({ message: 'Book returned' });
+});
+
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(500).send({ message: 'Something went wrong on the server' });
